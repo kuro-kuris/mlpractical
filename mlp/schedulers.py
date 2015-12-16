@@ -1,9 +1,10 @@
+# -*- coding: utf-8 -*-
 # Machine Learning Practical (INFR11119),
 # Pawel Swietojanski, University of Edinburgh
-
-import logging
-import power,exp from numpy
 from __future__ import division
+import logging
+from numpy import power,exp
+
 
 
 class LearningRateScheduler(object):
@@ -163,17 +164,17 @@ class LearningRateNewBob(LearningRateScheduler):
 # Reciprocal: η(t) = η(0)(1 + t/r)^−c (c ∼ 1)
 class LearningRateReciprocal(LearningRateScheduler):
 
-    def __init__(self, learning_rate, max_epochs=99, r, c=1):
+    def __init__(self, learning_rate, training_set_size, max_epochs=99, c=1, ):
         self.epoch = 0
         self.max_epochs = max_epochs
-        self.r = r
+        self.training_set_size = training_set_size
         self.c = c
         self.learning_rate = learning_rate
         
    
     def get_rate(self):
         if self.epoch < self.max_epochs:
-            return self.learning_rate*power((1+self.epoch/r),-c)
+            return self.learning_rate*power((1+self.epoch/self.training_set_size),-self.c)
         return 0.0
     
     def get_next_rate(self, current_accuracy=None):
@@ -184,16 +185,16 @@ class LearningRateReciprocal(LearningRateScheduler):
 # Exponential: η(t) = η(0) exp(−t/r) (r ∼ training set size)    
 class LearningRateExponential(LearningRateScheduler):
 
-    def __init__(self, learning_rate, max_epochs=99, r, c=1):
+    def __init__(self, learning_rate, training_set_size, max_epochs=99):
         self.epoch = 0
         self.max_epochs = max_epochs
-        self.r = r
+        self.train_set_size = train_set_size
         self.learning_rate = learning_rate
         
    
     def get_rate(self):
         if self.epoch < self.max_epochs:
-            return self.learning_rate*exp(-self.epoch/r)
+            return self.learning_rate*exp(-self.epoch/self.training_set_size)
         return 0.0
     
     def get_next_rate(self, current_accuracy=None):
