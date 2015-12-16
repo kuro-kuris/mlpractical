@@ -2,6 +2,8 @@
 # Pawel Swietojanski, University of Edinburgh
 
 import logging
+import power,exp from numpy
+from __future__ import division
 
 
 class LearningRateScheduler(object):
@@ -155,6 +157,49 @@ class LearningRateNewBob(LearningRateScheduler):
             self.epoch += 1
     
         return self.rate
+
+# Reciprocal: η(t) = η(0)(1 + t/r)^−c (c ∼ 1)
+class LearningRateReciprocal(LearningRateScheduler):
+
+    def __init__(self, learning_rate, max_epochs=99, r, c=1):
+        self.epoch = 0
+        self.max_epochs = max_epochs
+        self.r = r
+        self.c = c
+        self.learning_rate = learning_rate
+        
+   
+    def get_rate(self):
+        if self.epoch < self.max_epochs:
+            return self.learning_rate*power((1+self.epoch/r),-c)
+        return 0.0
+    
+    def get_next_rate(self, current_accuracy=None):
+        super(LearningRateReciprocal, self).get_next_rate(current_accuracy=None)
+        return self.get_rate()
+
+    
+# Exponential: η(t) = η(0) exp(−t/r) (r ∼ training set size)    
+class LearningRateExponential(LearningRateScheduler):
+
+    def __init__(self, learning_rate, max_epochs=99, r, c=1):
+        self.epoch = 0
+        self.max_epochs = max_epochs
+        self.r = r
+        self.learning_rate = learning_rate
+        
+   
+    def get_rate(self):
+        if self.epoch < self.max_epochs:
+            return self.learning_rate*exp(-self.epoch/r)
+        return 0.0
+    
+    def get_next_rate(self, current_accuracy=None):
+        super(LearningRateExponential, self).get_next_rate(current_accuracy=None)
+        return self.get_rate()
+    
+    
+    
 
 
 class DropoutFixed(LearningRateList):
