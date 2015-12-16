@@ -158,6 +158,8 @@ class LearningRateNewBob(LearningRateScheduler):
     
         return self.rate
 
+# Reciprocal and exponantial additional time dependent schedulers from the slides
+    
 # Reciprocal: η(t) = η(0)(1 + t/r)^−c (c ∼ 1)
 class LearningRateReciprocal(LearningRateScheduler):
 
