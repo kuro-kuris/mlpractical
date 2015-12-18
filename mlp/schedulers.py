@@ -164,17 +164,17 @@ class LearningRateNewBob(LearningRateScheduler):
 # Reciprocal: η(t) = η(0)(1 + t/r)^−c (c ∼ 1)
 class LearningRateReciprocal(LearningRateScheduler):
 
-    def __init__(self, learning_rate, training_set_size, max_epochs=99, c=1, ):
+    def __init__(self, learning_rate, train_set_size, max_epochs=99, c=1, ):
         self.epoch = 0
         self.max_epochs = max_epochs
-        self.training_set_size = training_set_size
+        self.train_set_size = train_set_size
         self.c = c
         self.learning_rate = learning_rate
         
    
     def get_rate(self):
         if self.epoch < self.max_epochs:
-            return self.learning_rate*power((1+self.epoch/self.training_set_size),-self.c)
+            return self.learning_rate*power((1+self.epoch/self.train_set_size),-self.c)
         return 0.0
     
     def get_next_rate(self, current_accuracy=None):
@@ -185,7 +185,7 @@ class LearningRateReciprocal(LearningRateScheduler):
 # Exponential: η(t) = η(0) exp(−t/r) (r ∼ training set size)    
 class LearningRateExponential(LearningRateScheduler):
 
-    def __init__(self, learning_rate, training_set_size, max_epochs=99):
+    def __init__(self, learning_rate, train_set_size, max_epochs=99):
         self.epoch = 0
         self.max_epochs = max_epochs
         self.train_set_size = train_set_size
@@ -194,7 +194,7 @@ class LearningRateExponential(LearningRateScheduler):
    
     def get_rate(self):
         if self.epoch < self.max_epochs:
-            return self.learning_rate*exp(-self.epoch/self.training_set_size)
+            return self.learning_rate*exp(-self.epoch/self.train_set_size)
         return 0.0
     
     def get_next_rate(self, current_accuracy=None):
@@ -218,3 +218,23 @@ class DropoutFixed(LearningRateList):
 
     def get_next_rate(self, current_accuracy=None):
         return self.get_rate()
+    
+class DropoutAnnealed(LearningRateList):
+
+    def __init__(self, p_inp_keep, p_hid_keep):
+        assert 0 <= p_inp_keep <= 1 and 0 <= p_hid_keep <= 1, (
+            "Dropout 'keep' probabilites are suppose to be in (0, 1] range"
+        )
+        super(DropoutAnnealed, self).__init__([(p_inp_keep, p_hid_keep)], max_epochs=999)
+
+    def get_rate(self):
+        dropout_tuple = self.lr_list[0]
+        anneal_rate = (self.max_epochs - self.epoch) / self.max_epochs
+        annealed_tuple = ( max(anneal_rate * dropout_tuple[0],0), max(anneal_rate * dropout_tuple[1],0) )        
+        return annealed_tuple
+
+    def get_next_rate(self, current_accuracy=None):
+        return self.get_rate()
+        
+        
+        
