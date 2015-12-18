@@ -219,21 +219,28 @@ class DropoutFixed(LearningRateList):
     def get_next_rate(self, current_accuracy=None):
         return self.get_rate()
     
-class DropoutAnnealed(LearningRateList):
+class DropoutAnnealed(LearningRateScheduler):
 
-    def __init__(self, p_inp_keep, p_hid_keep):
+    def __init__(self, p_inp_keep, p_hid_keep, max_epochs):
+        
+        super(LearningRateList, self).__init__(max_epochs)
+        
         assert 0 <= p_inp_keep <= 1 and 0 <= p_hid_keep <= 1, (
-            "Dropout 'keep' probabilites are suppose to be in (0, 1] range"
+            "Dropout 'keep' probabilites are suppose to be in [0, 1] range"
         )
-        super(DropoutAnnealed, self).__init__([(p_inp_keep, p_hid_keep)], max_epochs=999)
+        self.p_inp_keep = p_inp_keep
+        self.p_hid_keep = p_hid_keep
+
 
     def get_rate(self):
         dropout_tuple = self.lr_list[0]
         anneal_rate = (self.max_epochs - self.epoch) / self.max_epochs
-        annealed_tuple = ( max(anneal_rate * dropout_tuple[0],0), max(anneal_rate * dropout_tuple[1],0) )        
-        return annealed_tuple
+        self.p_inp_keep = max(anneal_rate * dropout_tuple[0],0)        
+        self.p_hid_keep = max(anneal_rate * dropout_tuple[1],0)
+        return (self.p_inp_keep, self.p_hid_keep)
 
     def get_next_rate(self, current_accuracy=None):
+        super(LearningRateList, self).get_next_rate(current_accuracy=None)
         return self.get_rate()
         
         
