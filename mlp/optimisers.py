@@ -213,6 +213,7 @@ class SGDOptimiser(Optimiser):
 
         return tr_stats, valid_stats
     
+    
     def pretrain_epoch_discriminative(self, model, train_iterator, learning_rate):
 
         assert isinstance(model, MLP), (
@@ -244,21 +245,21 @@ class SGDOptimiser(Optimiser):
             #and then over each parameter in the layer
             effective_learning_rate = learning_rate / x.shape[0]
             
-            if len(model.layers) > 2:
-                for i in xrange(len(model.layers)-2, len(model.layers)):
-                    params = model.layers[i].get_params()
-                    grads = model.layers[i].pgrads(inputs=model.activations[i],
-                                                   deltas=model.deltas[i + 1],
-                                                   l1_weight=self.l1_weight,
-                                                   l2_weight=self.l2_weight)
-                    uparams = []
-                    for param, grad in zip(params, grads):
-                        param = param - effective_learning_rate * grad
-                        uparams.append(param)
-                    model.layers[i].set_params(uparams)
+            
+            for i in xrange(len(model.layers)-2, len(model.layers)):
+                params = model.layers[i].get_params()
+                grads = model.layers[i].pgrads(inputs=model.activations[i],
+                                               deltas=model.deltas[i + 1],
+                                               l1_weight=self.l1_weight,
+                                               l2_weight=self.l2_weight)
+                uparams = []
+                for param, grad in zip(params, grads):
+                    param = param - effective_learning_rate * grad
+                    uparams.append(param)
+                model.layers[i].set_params(uparams)
 
-                nll_list.append(cost)
-                acc_list.append(numpy.mean(self.classification_accuracy(y, t)))
+            nll_list.append(cost)
+            acc_list.append(numpy.mean(self.classification_accuracy(y, t)))
 
         #compute the prior penalties contribution (parameter dependent only)
         prior_costs = Optimiser.compute_prior_costs(model, self.l1_weight, self.l2_weight)
@@ -266,29 +267,67 @@ class SGDOptimiser(Optimiser):
 
         return training_cost, numpy.mean(acc_list)
 
-    def pretrain_discriminative(self, model, train_iterator, valid_iterator=None):
+    def pretrain_discriminative(self, model, train_iterator, rng, layers, nhid, valid_iterator=None):
 
-        converged = False
+        from mlp.layers import Sigmoid, Softmax #import required layer types
+        
+        assert len(model.layers) > 0, (
+            "model size expected to be > 1, got %f" % len(model.layers)
+        )        
+        
+        deep_enough = False
+        j = 0
         cost_name = model.cost.get_name()
         tr_stats, valid_stats = [], []
 
-        # do the initial validation
-        train_iterator.reset()
-        tr_nll, tr_acc = self.validate(model, train_iterator, self.l1_weight, self.l2_weight)
-        logger.info('Epoch %i: Training cost (%s) for initial model is %.3f. Accuracy is %.2f%%'
-                    % (self.lr_scheduler.epoch, cost_name, tr_nll, tr_acc * 100.))
-        tr_stats.append((tr_nll, tr_acc))
+        while not deep_enough:
+            
+            
+            # Remove the output layer and weights leading to the output layer
+            # input is single hidden layer network
+            
 
-        if valid_iterator is not None:
-            valid_iterator.reset()
-            valid_nll, valid_acc = self.validate(model, valid_iterator, self.l1_weight, self.l2_weight)
-            logger.info('Epoch %i: Validation cost (%s) for initial model is %.3f. Accuracy is %.2f%%'
-                        % (self.lr_scheduler.epoch, cost_name, valid_nll, valid_acc * 100.))
-            valid_stats.append((valid_nll, valid_acc))
+            
+            
+            if len(model.layers) > 1:
+                model.layers = model.layers[:-2]
+                
+                # Add an additional hidden layer and train only the newly added weights
+                model.add_layer(Sigmoid(idim=nhid, odim=nhid, irange=0.2, rng=rng))
+                                
+                # add evaluation softmax and evaluation hidden layer
+                # compensating for the 2 layers removed intially
+                # to follow the structure in the slides
+                model.add_layer(Sigmoid(idim=nhid, odim=nhid, irange=0.2, rng=rng))                                
+                model.add_layer(Softmax(idim=nhid, odim=10, rng=rng))
+            else:
+                model.add_layer(Sigmoid(idim=nhid, odim=nhid, irange=0.2, rng=rng))                                
+                model.add_layer(Softmax(idim=nhid, odim=10, rng=rng))
+            
+            i = 1
+            for layer in model.layers:
+                print layer.get_name(),layer.idim,layer.odim,i
+                i += 1
+            print "run #", j+1
+            print "target ", layers
 
-        while not converged:
+
+            # do the initial validation
             train_iterator.reset()
+            tr_nll, tr_acc = self.validate(model, train_iterator, self.l1_weight, self.l2_weight)
+            logger.info('Epoch %i: Training cost (%s) for initial model is %.3f. Accuracy is %.2f%%'
+                        % (self.lr_scheduler.epoch, cost_name, tr_nll, tr_acc * 100.))
+            tr_stats.append((tr_nll, tr_acc))
 
+            if valid_iterator is not None:
+                valid_iterator.reset()
+                valid_nll, valid_acc = self.validate(model, valid_iterator, self.l1_weight, self.l2_weight)
+                logger.info('Epoch %i: Validation cost (%s) for initial model is %.3f. Accuracy is %.2f%%'
+                            % (self.lr_scheduler.epoch, cost_name, valid_nll, valid_acc * 100.))
+                valid_stats.append((valid_nll, valid_acc))    
+                
+                
+            train_iterator.reset()    
             tstart = time.clock()
             tr_nll, tr_acc = self.pretrain_epoch_discriminative(model=model,
                                               train_iterator=train_iterator,
@@ -296,7 +335,7 @@ class SGDOptimiser(Optimiser):
             tstop = time.clock()
             tr_stats.append((tr_nll, tr_acc))
 
-            logger.info('PING Epoch %i: Training cost (%s) is %.3f. Accuracy is %.2f%%'
+            logger.info('Epoch %i: Pretraining cost (%s) is %.3f. Accuracy is %.2f%%'
                         % (self.lr_scheduler.epoch + 1, cost_name, tr_nll, tr_acc * 100.))
 
             vstart = time.clock()
@@ -320,13 +359,13 @@ class SGDOptimiser(Optimiser):
                         "Validation speed %.0f pps."
                         % (self.lr_scheduler.epoch, tot_time, train_speed, valid_speed))
 
-            # we stop training when learning rate, as returned by lr scheduler, is 0
-            # this is implementation dependent and depending on lr schedule could happen,
-            # for example, when max_epochs has been reached or if the progress between
-            # two consecutive epochs is too small, etc.
-            converged = (self.lr_scheduler.get_rate() == 0)
+            # we stop training when we reach deep enough
+            j += 1
+            deep_enough = (j == layers - 1)
 
         return tr_stats, valid_stats
+    
+
     
     
 
